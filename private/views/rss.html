@@ -22,6 +22,7 @@
 
     .unreadArticle {
         color: var(--darkmode-text);
+	    font-weight: bold;
     }
 
     #rssFetchingDisabled {
@@ -415,18 +416,29 @@
             if (path === '')
                 visibleArticles = visibleArticles.filter((a) => !a.isRead);
 
-            visibleArticles.sort((e1, e2) => new Date(e2.date) - new Date(e1.date))
-                .each((torrentEntry) => {
-                    rssArticleTable.updateRowData({
-                        rowId: rowCount++,
-                        name: torrentEntry.title,
-                        link: torrentEntry.link,
-                        torrentURL: torrentEntry.torrentURL,
-                        feedUid: torrentEntry.feedUid,
-                        dataId: torrentEntry.id,
-                        isRead: torrentEntry.isRead
-                    });
+            // visibleArticles.sort((e1, e2) => new Date(e2.date) - new Date(e1.date))
+            visibleArticles.sort((e1, e2) => {
+                if (e1.title < e2.title) {
+                    return -1;
+                }
+                if (e1.title > e2.title) {
+                    return 1;
+                }
+                return 0;
+            }).each((torrentEntry) => {
+                if (torrentEntry.title.indexOf('720p') > -1 || torrentEntry.title.indexOf('1080p') > -1) {
+                    markArticleAsRead(pathByFeedId.get(torrentEntry.feedUid), torrentEntry.id);
+                }
+                rssArticleTable.updateRowData({
+                    rowId: rowCount++,
+                    name: torrentEntry.title,
+                    link: torrentEntry.link,
+                    torrentURL: torrentEntry.torrentURL,
+                    feedUid: torrentEntry.feedUid,
+                    dataId: torrentEntry.id,
+                    isRead: torrentEntry.isRead
                 });
+            });
 
             $('rssDetailsView').empty();
             rssArticleTable.updateTable(false);
@@ -458,9 +470,9 @@
                     return torrentDate;
                 })());
                 // Place in iframe with sandbox attribute to prevent js execution
-                let torrentDescription = document.createRange().createContextualFragment('<iframe sandbox id="rssDescription"></iframe>');
+                let torrentDescription = document.createRange().createContextualFragment('<iframe sandbox="allow-popups allow-popups-to-escape-sandbox" id="rssDescription"></iframe>');
                 $('rssDetailsView').append(torrentDescription);
-                document.getElementById('rssDescription').srcdoc = '<html><head><link rel="stylesheet" type="text/css" href="./css/style.css" /> <style> body { background: #202020; color: #c2c2c2; } </style> </head><body>' + article.description + "</body></html>";
+                document.getElementById('rssDescription').srcdoc = '<html><head><link rel="stylesheet" type="text/css" href="./css/style.css" /> <style> body { background: #202020; color: #c2c2c2; } </style> </head><body>' + parseDescription(article) + "</body></html>";
 
                 // calculate height to fill screen
                 document.getElementById('rssDescription').style.height =
@@ -468,6 +480,34 @@
                     + document.getElementById('rssTorrentDetailsDate').offsetHeight + "px - 5px)";
 
                 // color the background accordingly to match everything else
+            }
+        };
+
+        const parseDescription = (article) => {
+            // Regular expression to find IMDb URL
+            const imdbRegex = /(http:\/\/www\.imdb\.com\/title\/tt\d+)/;
+            if (!article.description) {
+                article.description = '';
+            }
+            // Check if the description contains an IMDb URL
+            if (imdbRegex.test(article.description)) {
+                // Replace the plain URL with an HTML hyperlink
+                return article.description.replace(imdbRegex, '<a href="$1" target="_blank">$1</a>').replaceAll("\n", "<br>").replace("http", "https");
+            }
+            else {
+                const regex = /^(.*?)\s2160p/;
+                const match = article.title.match(regex);
+
+                if (match && match[1]) {
+                    // Remove special characters (non-word characters and underscores)
+                    const titleWithoutSpecialChars = match[1].replace(/[\W_]+/g, ' ').trim();
+
+                    // URL encode the cleaned title
+                    return `${article.description}<br><a href="https://www.imdb.com/find/?q=${encodeURIComponent(titleWithoutSpecialChars)}" target="_blank">IMDB search</a>`;
+                } else {
+                    // If no match found, return the URL encoded original string (with special characters removed)
+                    return article.description;
+                }
             }
         };
 
